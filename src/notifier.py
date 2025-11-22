@@ -10,9 +10,15 @@ from src.config import Config
 class Notifier:
     """Handles sending notifications via various channels"""
     
-    def __init__(self):
+    def __init__(self, telegram_chat_id: str = None):
+        """
+        Initialize notifier
+        
+        Args:
+            telegram_chat_id: Override default Telegram chat ID (optional)
+        """
         self.telegram_bot_token = Config.TELEGRAM_BOT_TOKEN
-        self.telegram_chat_id = Config.TELEGRAM_CHAT_ID
+        self.telegram_chat_id = telegram_chat_id or Config.TELEGRAM_CHAT_ID
     
     def send_violations(self, violations: List[RuleViolation]):
         """Send notifications for rule violations"""
