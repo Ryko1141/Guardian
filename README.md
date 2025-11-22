@@ -8,11 +8,19 @@ A Python-based trading account monitoring system that tracks risk metrics and se
 - **Real-time monitoring** of trading accounts
 - **Dual modes** (cTrader): REST polling (simple) or WebSocket streaming (advanced)
 - **MT5 native integration**: Direct connection to MetaTrader 5 terminal
+- **Rich console output** with color-coded panels and formatted breach notifications
+- **Pure function design** - Rules engine uses testable pure functions with no API dependencies
 - **Comprehensive risk rules**:
-  - Daily loss limits (realised + unrealised P&L)
-  - Position size limits per trade
+  - Daily loss limits (realised + unrealised P&L) with warning thresholds
+  - Total drawdown limits from starting balance
+  - Position size limits per trade (% of balance)
+  - Maximum open lots across all positions
+  - Maximum position count
   - Margin level monitoring
-- **Telegram notifications** for rule violations
+  - Stop loss requirements
+- **Flexible rule configuration** - Predefined prop firm rules (FTMO, Alpha Capital, etc.) or custom rules
+- **Multi-account monitoring** - Monitor multiple accounts simultaneously with `multi_runner.py`
+- **Offline testing** - Test rules with dummy data (no API required)
 - **Today's P&L tracking** - monitors realised + unrealised profit/loss
 - **Account snapshots** - balance, equity, margin, positions
 - Easy configuration via environment variables
@@ -286,16 +294,50 @@ AsyncRunner → CTraderClient.connect() → WebSocket
 
 ## Notifications
 
-Violations are sent via:
-- Telegram (if configured)
-- Console output (always)
+Rule breaches are displayed in the console with **rich formatted output**:
+
+- ✅ **Clean, readable panels** for breach notifications
+- 🟡 **Yellow "WARN" tags** for warning thresholds (80% of limit)
+- 🔴 **Red "HARD" tags** for hard limit violations
+- Color-coded account status and P&L display
+
+The notification system is **extensible** by design. Currently implemented:
+- `notify_console()` - Rich console output (default)
+
+**Future channels** can be easily added in `src/notifier.py`:
+- `notify_telegram()` - Telegram bot messages
+- `notify_email()` - Email alerts
+- `notify_discord_webhook()` - Discord notifications
+- `notify_slack_webhook()` - Slack messages
+
+See the example output by running:
+```bash
+python examples/test_rules_offline.py
+```
 
 ## Development
 
 To extend the system:
-1. Add new rule validators in `src/rules.py`
-2. Add new notification channels in `src/notifier.py`
-3. Modify risk thresholds in `.env`
+
+1. **Add new rule validators** in `src/rules.py`:
+   - Implement new `_check_*()` functions
+   - Add checks to `check_account_rules()` function
+   - Rules return `RuleBreach` objects with level ("WARN"/"HARD")
+
+2. **Add new notification channels** in `src/notifier.py`:
+   - Follow the pattern: `notify_<channel>(account_label: str, breaches: List[RuleBreach])`
+   - Current implementation: `notify_console()`
+   - Future: `notify_telegram()`, `notify_email()`, `notify_discord_webhook()`
+
+3. **Modify risk thresholds**:
+   - Environment variables in `.env` (legacy)
+   - Prop firm rules in `src/config.py` (FTMO_RULES, etc.)
+   - Custom rules in `accounts.json` or programmatically
+
+4. **Test offline**:
+   - Use `check_account_rules()` with dummy `AccountSnapshot` objects
+   - See `examples/test_rules_offline.py` and `tests/test_rules.py`
+   - No API dependencies required for testing logic
 
 ## License
 

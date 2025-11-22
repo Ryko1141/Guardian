@@ -4,8 +4,11 @@ Multi-account runner for monitoring multiple trading accounts simultaneously
 import asyncio
 import sys
 from pathlib import Path
+from rich.console import Console
 from src.config import AccountManager
 from src.runner import RiskMonitor
+
+console = Console()
 
 
 class MultiAccountMonitor:
@@ -29,7 +32,7 @@ class MultiAccountMonitor:
             try:
                 monitor.check_once()
             except Exception as e:
-                print(f"Error monitoring {monitor.account_config.label}: {e}")
+                console.print(f"[red]Error monitoring {monitor.account_config.label}: {e}[/red]")
             
             await asyncio.sleep(monitor.account_config.check_interval)
     
@@ -40,13 +43,13 @@ class MultiAccountMonitor:
         enabled_accounts = self.account_manager.get_enabled_accounts()
         
         if not enabled_accounts:
-            print("No enabled accounts found in configuration!")
+            console.print("[red]No enabled accounts found in configuration![/red]")
             return
         
-        print(f"\n{'='*60}")
-        print(f"Starting Multi-Account Risk Monitor")
-        print(f"{'='*60}")
-        print(f"Monitoring {len(enabled_accounts)} account(s):\n")
+        console.print(f"\n[bold cyan]{'='*60}[/bold cyan]")
+        console.print(f"[bold cyan]Starting Multi-Account Risk Monitor[/bold cyan]")
+        console.print(f"[bold cyan]{'='*60}[/bold cyan]")
+        console.print(f"Monitoring [bold]{len(enabled_accounts)}[/bold] account(s):\n")
         
         # Create monitors for each enabled account
         for account in enabled_accounts:
@@ -54,21 +57,21 @@ class MultiAccountMonitor:
                 monitor = RiskMonitor(account_config=account)
                 self.monitors.append(monitor)
                 
-                print(f"✓ {account.label}")
-                print(f"  Firm: {account.firm} ({account.rules.name})")
-                print(f"  Platform: {account.platform.upper()}")
-                print(f"  Starting Balance: ${account.starting_balance:,.2f}")
-                print(f"  Check Interval: {account.check_interval}s")
-                print()
+                console.print(f"[green]✓[/green] [bold]{account.label}[/bold]")
+                console.print(f"  Firm: {account.firm} ([cyan]{account.rules.name}[/cyan])")
+                console.print(f"  Platform: {account.platform.upper()}")
+                console.print(f"  Starting Balance: ${account.starting_balance:,.2f}")
+                console.print(f"  Check Interval: {account.check_interval}s")
+                console.print()
                 
             except Exception as e:
-                print(f"✗ Failed to initialize {account.label}: {e}\n")
+                console.print(f"[red]✗ Failed to initialize {account.label}: {e}[/red]\n")
         
         if not self.monitors:
-            print("No monitors initialized successfully!")
+            console.print("[red]No monitors initialized successfully![/red]")
             return
         
-        print(f"{'='*60}\n")
+        console.print(f"[bold cyan]{'='*60}[/bold cyan]\n")
         
         # Run all monitors concurrently
         tasks = [self.monitor_account(monitor) for monitor in self.monitors]
@@ -79,7 +82,7 @@ class MultiAccountMonitor:
         try:
             asyncio.run(self.start_async())
         except KeyboardInterrupt:
-            print("\nStopping all monitors...")
+            console.print("\n[yellow]Stopping all monitors...[/yellow]")
             self.stop()
     
     def stop(self):
@@ -92,7 +95,7 @@ class MultiAccountMonitor:
             except:
                 pass
         
-        print("All monitors stopped.")
+        console.print("[yellow]All monitors stopped.[/yellow]")
 
 
 def main():
@@ -109,11 +112,11 @@ def main():
     args = parser.parse_args()
     
     if not Path(args.config).exists():
-        print(f"Error: Configuration file '{args.config}' not found!")
-        print("\nPlease create an accounts.json file based on accounts.json.example")
-        print("Example:")
-        print("  cp accounts.json.example accounts.json")
-        print("  # Edit accounts.json with your account details")
+        console.print(f"[red]Error: Configuration file '{args.config}' not found![/red]")
+        console.print("\nPlease create an accounts.json file based on accounts.json.example")
+        console.print("Example:")
+        console.print("  cp accounts.json.example accounts.json")
+        console.print("  # Edit accounts.json with your account details")
         sys.exit(1)
     
     monitor = MultiAccountMonitor(config_file=args.config)
@@ -121,7 +124,7 @@ def main():
     try:
         monitor.start()
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        console.print("\n[yellow]Shutting down...[/yellow]")
         monitor.stop()
 
 

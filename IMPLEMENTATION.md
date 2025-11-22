@@ -188,6 +188,9 @@ This will:
 - [ ] WebSocket auto-reconnection with exponential backoff
 - [ ] Rate limiting and request throttling
 - [ ] Historical data pagination
-- [ ] Multiple account monitoring
-- [ ] Position tracking and analytics
+- [x] Multiple account monitoring (via multi_runner.py)
+- [x] Position tracking and analytics (via prop rules system)
 - [ ] Trade journal integration
+- [x] Pure logic rules engine (testable offline)
+- [x] Prop firm rule presets (FTMO, Alpha Capital, etc.)
+- [x] Warning threshold system (configurable buffer)

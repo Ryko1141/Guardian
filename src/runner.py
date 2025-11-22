@@ -6,8 +6,11 @@ import time
 from datetime import datetime
 from src.config import Config, AccountConfig, AccountManager
 from src.models import AccountSnapshot, Position
-from src.rules import RiskRuleEngine
-from src.notifier import Notifier
+from src.rules import check_account_rules
+from src.notifier import notify_console
+from rich.console import Console
+
+console = Console()
 
 
 class RiskMonitor:
@@ -41,7 +44,7 @@ class RiskMonitor:
             self.client = CTraderClient(
                 account_id=self.account_config.account_id
             )
-            print(f"Using cTrader platform for {self.account_config.label}")
+            console.print(f"[green]✓[/green] Using cTrader platform for {self.account_config.label}")
         elif self.account_config.platform == "mt5":
             from src.mt5_client import MT5Client
             self.client = MT5Client(
@@ -50,32 +53,19 @@ class RiskMonitor:
             # Connect to MT5 terminal
             if not self.client.connect():
                 raise ConnectionError("Failed to connect to MT5")
-            print(f"Using MetaTrader 5 platform for {self.account_config.label}")
+            console.print(f"[green]✓[/green] Using MetaTrader 5 platform for {self.account_config.label}")
         else:
             raise ValueError(f"Unsupported platform: {self.account_config.platform}")
         
-        # Initialize rule engine with prop firm rules
-        self.rule_engine = RiskRuleEngine(
-            prop_rules=self.account_config.rules,
-            starting_balance=self.account_config.starting_balance
-        )
-        
-        # Initialize notifier (use account-specific chat if provided)
-        self.notifier = Notifier(
-            telegram_chat_id=self.account_config.telegram_chat_id
-        )
-        
         self.running = False
         
-        # Send startup notification
-        self.notifier.send_status(
-            f"🚀 Risk Monitor Started\n"
-            f"Account: {self.account_config.label}\n"
-            f"Firm: {self.account_config.firm}\n"
-            f"Platform: {self.account_config.platform.upper()}\n"
-            f"Starting Balance: ${self.account_config.starting_balance:,.2f}\n"
-            f"Check Interval: {self.account_config.check_interval}s"
-        )
+        # Print startup info
+        console.print(f"[bold cyan]🚀 Risk Monitor Started[/bold cyan]")
+        console.print(f"Account: [bold]{self.account_config.label}[/bold]")
+        console.print(f"Firm: {self.account_config.firm}")
+        console.print(f"Platform: {self.account_config.platform.upper()}")
+        console.print(f"Starting Balance: ${self.account_config.starting_balance:,.2f}")
+        console.print(f"Check Interval: {self.account_config.check_interval}s")
     
     def _create_snapshot(self) -> AccountSnapshot:
         """Create an account snapshot from current API data"""
@@ -86,24 +76,36 @@ class RiskMonitor:
         """Perform a single monitoring check"""
         try:
             snapshot = self._create_snapshot()
-            violations = self.rule_engine.evaluate(snapshot)
             
-            if violations:
-                self.notifier.send_violations(violations)
+            # Use pure function to check rules
+            breaches = check_account_rules(
+                snapshot, 
+                self.account_config.rules,
+                self.account_config.starting_balance
+            )
             
-            print(f"[{snapshot.timestamp}] Check complete - Equity: ${snapshot.equity:.2f}, P&L: ${snapshot.total_profit_loss:.2f}, Violations: {len(violations)}")
+            # Notify if breaches found
+            if breaches:
+                notify_console(self.account_config.label, breaches)
+            
+            # Status update
+            timestamp = snapshot.timestamp.strftime('%H:%M:%S')
+            status = f"[dim][{timestamp}] Check complete[/dim] - "
+            status += f"Equity: [cyan]${snapshot.equity:,.2f}[/cyan], "
+            status += f"P&L: [{'green' if snapshot.total_profit_loss >= 0 else 'red'}]${snapshot.total_profit_loss:,.2f}[/], "
+            status += f"Breaches: [{'red' if breaches else 'green'}]{len(breaches)}[/]"
+            console.print(status)
             
         except Exception as e:
-            print(f"Error during check: {e}")
-            self.notifier.send_status(f"Error during monitoring: {str(e)}")
+            console.print(f"[red]Error during check: {e}[/red]")
     
     def start(self):
         """Start the monitoring loop"""
         self.running = True
         
-        print(f"Starting risk monitor for {self.account_config.label}...")
-        print(f"Firm: {self.account_config.firm} ({self.account_config.rules.name})")
-        print(f"Check interval: {self.account_config.check_interval}s")
+        console.print(f"\n[bold]Starting risk monitor for {self.account_config.label}...[/bold]")
+        console.print(f"Firm: {self.account_config.firm} ([cyan]{self.account_config.rules.name}[/cyan])")
+        console.print(f"Check interval: {self.account_config.check_interval}s\n")
         
         while self.running:
             self.check_once()
@@ -112,8 +114,7 @@ class RiskMonitor:
     def stop(self):
         """Stop the monitoring loop"""
         self.running = False
-        self.notifier.send_status("Risk monitor stopped")
-        print("Risk monitor stopped")
+        console.print("[yellow]Risk monitor stopped[/yellow]")
 
 
 def main():
@@ -123,7 +124,7 @@ def main():
     try:
         monitor.start()
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        console.print("\n[yellow]Shutting down...[/yellow]")
         monitor.stop()
 
 

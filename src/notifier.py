@@ -1,77 +1,54 @@
 """
 Notification system for sending alerts
+
+Simple, readable console output using rich.
+Extensible design for future notification channels.
 """
 from typing import List
-import requests
-from src.models import RuleViolation
-from src.config import Config
+from rich.console import Console
+from rich.panel import Panel
+from src.models import RuleBreach
+
+console = Console()
 
 
-class Notifier:
-    """Handles sending notifications via various channels"""
+def notify_console(account_label: str, breaches: List[RuleBreach]):
+    """
+    Display rule breaches in the console with rich formatting.
     
-    def __init__(self, telegram_chat_id: str = None):
-        """
-        Initialize notifier
-        
-        Args:
-            telegram_chat_id: Override default Telegram chat ID (optional)
-        """
-        self.telegram_bot_token = Config.TELEGRAM_BOT_TOKEN
-        self.telegram_chat_id = telegram_chat_id or Config.TELEGRAM_CHAT_ID
+    Args:
+        account_label: Account identifier (e.g., "FTMO-12345")
+        breaches: List of RuleBreach objects to display
+    """
+    if not breaches:
+        return
     
-    def send_violations(self, violations: List[RuleViolation]):
-        """Send notifications for rule violations"""
-        if not violations:
-            return
-        
-        for violation in violations:
-            self._send_telegram(violation)
+    lines = [f"[bold]{account_label}[/bold]:"]
+    for b in breaches:
+        prefix = "[red]HARD[/red]" if b.level == "HARD" else "[yellow]WARN[/yellow]"
+        lines.append(f"{prefix} {b.code} – {b.message}")
     
-    def _send_telegram(self, violation: RuleViolation):
-        """Send notification via Telegram"""
-        if not self.telegram_bot_token or not self.telegram_chat_id:
-            print(f"[{violation.severity.upper()}] {violation.message}")
-            return
-        
-        # Format message
-        emoji = "🔴" if violation.severity == "critical" else "⚠️"
-        message = f"{emoji} *{violation.rule_name}*\n\n{violation.message}"
-        
-        if violation.value is not None and violation.threshold is not None:
-            message += f"\n\nValue: {violation.value:.2f}\nThreshold: {violation.threshold:.2f}"
-        
-        message += f"\n\n_Time: {violation.timestamp.strftime('%Y-%m-%d %H:%M:%S')}_"
-        
-        # Send via Telegram API
-        url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
-        payload = {
-            "chat_id": self.telegram_chat_id,
-            "text": message,
-            "parse_mode": "Markdown"
-        }
-        
-        try:
-            response = requests.post(url, json=payload)
-            response.raise_for_status()
-        except Exception as e:
-            print(f"Failed to send Telegram notification: {e}")
-            print(f"[{violation.severity.upper()}] {violation.message}")
-    
-    def send_status(self, message: str):
-        """Send a general status message"""
-        if not self.telegram_bot_token or not self.telegram_chat_id:
-            print(f"[STATUS] {message}")
-            return
-        
-        url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
-        payload = {
-            "chat_id": self.telegram_chat_id,
-            "text": f"ℹ️ {message}"
-        }
-        
-        try:
-            response = requests.post(url, json=payload)
-            response.raise_for_status()
-        except Exception as e:
-            print(f"Failed to send status message: {e}")
+    console.print(Panel("\n".join(lines)))
+
+
+# Future notification channels (extensible design):
+
+# def notify_email(account_label: str, breaches: List[RuleBreach], 
+#                  to_email: str, smtp_config: dict):
+#     """Send email notification for breaches"""
+#     pass
+
+# def notify_telegram(account_label: str, breaches: List[RuleBreach],
+#                     bot_token: str, chat_id: str):
+#     """Send Telegram notification for breaches"""
+#     pass
+
+# def notify_discord_webhook(account_label: str, breaches: List[RuleBreach],
+#                           webhook_url: str):
+#     """Send Discord webhook notification for breaches"""
+#     pass
+
+# def notify_slack_webhook(account_label: str, breaches: List[RuleBreach],
+#                         webhook_url: str):
+#     """Send Slack webhook notification for breaches"""
+#     pass

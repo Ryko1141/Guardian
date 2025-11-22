@@ -1,13 +1,294 @@
 """
-Risk monitoring rules and validators
+Risk monitoring rules and validators - Pure logic, no API dependencies
 """
 from typing import List, Optional
 from datetime import datetime
-from src.models import AccountSnapshot, RuleViolation
+from src.models import AccountSnapshot, Position, RuleBreach, RuleViolation
 from src.config import PropRules, Config
 
 
+def check_account_rules(
+    snapshot: AccountSnapshot,
+    rules: PropRules,
+    starting_balance: Optional[float] = None
+) -> List[RuleBreach]:
+    """
+    Check all account rules and return list of breaches (pure function)
+    
+    Args:
+        snapshot: Current account state
+        rules: PropRules configuration
+        starting_balance: Starting balance for total DD calculation (overrides snapshot)
+    
+    Returns:
+        List of RuleBreach objects (warnings and hard limits)
+    """
+    breaches = []
+    
+    # Update snapshot starting balance if provided
+    if starting_balance:
+        snapshot.starting_balance = starting_balance
+    
+    # Check daily drawdown
+    breaches.extend(_check_daily_drawdown(snapshot, rules))
+    
+    # Check total drawdown
+    breaches.extend(_check_total_drawdown(snapshot, rules))
+    
+    # Check risk per trade
+    breaches.extend(_check_risk_per_trade(snapshot, rules))
+    
+    # Check total lot size
+    breaches.extend(_check_total_lots(snapshot.positions, rules))
+    
+    # Check position count
+    breaches.extend(_check_position_count(snapshot.positions, rules))
+    
+    # Check margin level
+    breaches.extend(_check_margin_level(snapshot))
+    
+    # Check stop losses (if required)
+    if rules.require_stop_loss:
+        breaches.extend(_check_stop_losses(snapshot.positions, rules))
+    
+    return breaches
+
+
+def _check_daily_drawdown(snapshot: AccountSnapshot, rules: PropRules) -> List[RuleBreach]:
+    """Check daily drawdown limits"""
+    breaches = []
+    dd = snapshot.daily_drawdown_pct
+    
+    # Hard limit (critical)
+    if dd <= -rules.max_daily_drawdown_pct:
+        breaches.append(RuleBreach(
+            level="HARD",
+            code="DAILY_DD",
+            message=f"🚨 Daily DD limit breached: {dd:.2f}% <= -{rules.max_daily_drawdown_pct}%",
+            value=abs(dd),
+            threshold=rules.max_daily_drawdown_pct
+        ))
+    # Warning threshold
+    elif dd <= -rules.max_daily_drawdown_pct * rules.warn_buffer_pct:
+        breaches.append(RuleBreach(
+            level="WARN",
+            code="DAILY_DD",
+            message=f"⚠️ Daily DD warning: {dd:.2f}% approaching -{rules.max_daily_drawdown_pct}%",
+            value=abs(dd),
+            threshold=rules.max_daily_drawdown_pct * rules.warn_buffer_pct
+        ))
+    
+    return breaches
+
+
+def _check_total_drawdown(snapshot: AccountSnapshot, rules: PropRules) -> List[RuleBreach]:
+    """Check total drawdown from starting balance"""
+    breaches = []
+    
+    if not snapshot.starting_balance or snapshot.starting_balance <= 0:
+        return breaches
+    
+    tdd = snapshot.total_drawdown_pct
+    
+    # Only check if account is in drawdown (negative)
+    if tdd >= 0:
+        return breaches
+    
+    # Hard limit (critical)
+    if tdd <= -rules.max_total_drawdown_pct:
+        breaches.append(RuleBreach(
+            level="HARD",
+            code="TOTAL_DD",
+            message=f"🚨 Total DD limit breached: {tdd:.2f}% <= -{rules.max_total_drawdown_pct}%",
+            value=abs(tdd),
+            threshold=rules.max_total_drawdown_pct
+        ))
+    # Warning threshold
+    elif tdd <= -rules.max_total_drawdown_pct * rules.warn_buffer_pct:
+        breaches.append(RuleBreach(
+            level="WARN",
+            code="TOTAL_DD",
+            message=f"⚠️ Total DD warning: {tdd:.2f}% approaching -{rules.max_total_drawdown_pct}%",
+            value=abs(tdd),
+            threshold=rules.max_total_drawdown_pct * rules.warn_buffer_pct
+        ))
+    
+    return breaches
+
+
+def _check_risk_per_trade(snapshot: AccountSnapshot, rules: PropRules) -> List[RuleBreach]:
+    """Check individual position risk limits"""
+    breaches = []
+    
+    for position in snapshot.positions:
+        # Calculate position risk as percentage of balance
+        position_value = abs(position.volume * position.current_price)
+        position_pct = (position_value / snapshot.balance) * 100
+        
+        # Hard limit
+        if position_pct >= rules.max_risk_per_trade_pct:
+            breaches.append(RuleBreach(
+                level="HARD",
+                code="RISK_PER_TRADE",
+                message=f"🚨 Position {position.symbol} risk {position_pct:.2f}% > {rules.max_risk_per_trade_pct}%",
+                value=position_pct,
+                threshold=rules.max_risk_per_trade_pct
+            ))
+        # Warning threshold
+        elif position_pct >= rules.max_risk_per_trade_pct * rules.warn_buffer_pct:
+            breaches.append(RuleBreach(
+                level="WARN",
+                code="RISK_PER_TRADE",
+                message=f"⚠️ Position {position.symbol} risk {position_pct:.2f}% approaching {rules.max_risk_per_trade_pct}%",
+                value=position_pct,
+                threshold=rules.max_risk_per_trade_pct * rules.warn_buffer_pct
+            ))
+    
+    return breaches
+
+
+def _check_total_lots(positions: List[Position], rules: PropRules) -> List[RuleBreach]:
+    """Check total lot size across all positions"""
+    breaches = []
+    total_lots = sum(abs(p.volume) for p in positions)
+    
+    # Hard limit
+    if total_lots > rules.max_open_lots:
+        breaches.append(RuleBreach(
+            level="HARD",
+            code="MAX_LOTS",
+            message=f"🚨 Max lot limit exceeded: {total_lots:.2f} > {rules.max_open_lots}",
+            value=total_lots,
+            threshold=rules.max_open_lots
+        ))
+    # Warning threshold
+    elif total_lots > rules.max_open_lots * rules.warn_buffer_pct:
+        breaches.append(RuleBreach(
+            level="WARN",
+            code="MAX_LOTS",
+            message=f"⚠️ Open lots warning: {total_lots:.2f} approaching {rules.max_open_lots}",
+            value=total_lots,
+            threshold=rules.max_open_lots * rules.warn_buffer_pct
+        ))
+    
+    return breaches
+
+
+def _check_position_count(positions: List[Position], rules: PropRules) -> List[RuleBreach]:
+    """Check number of open positions"""
+    breaches = []
+    count = len(positions)
+    
+    if count > rules.max_positions:
+        breaches.append(RuleBreach(
+            level="WARN",
+            code="MAX_POSITIONS",
+            message=f"⚠️ Position count {count} exceeds limit {rules.max_positions}",
+            value=float(count),
+            threshold=float(rules.max_positions)
+        ))
+    
+    return breaches
+
+
+def _check_margin_level(snapshot: AccountSnapshot) -> List[RuleBreach]:
+    """Check margin level"""
+    breaches = []
+    
+    if snapshot.margin_used == 0:
+        return breaches
+    
+    margin_level = (snapshot.margin_available / snapshot.margin_used) * 100
+    
+    # Critical threshold (50%)
+    if margin_level < 50:
+        breaches.append(RuleBreach(
+            level="HARD",
+            code="MARGIN_LEVEL",
+            message=f"🚨 Margin level critically low: {margin_level:.2f}%",
+            value=margin_level,
+            threshold=50.0
+        ))
+    # Warning threshold (100%)
+    elif margin_level < 100:
+        breaches.append(RuleBreach(
+            level="WARN",
+            code="MARGIN_LEVEL",
+            message=f"⚠️ Margin level low: {margin_level:.2f}%",
+            value=margin_level,
+            threshold=100.0
+        ))
+    
+    return breaches
+
+
+def _check_stop_losses(positions: List[Position], rules: PropRules) -> List[RuleBreach]:
+    """Check if all positions have stop losses (if required by firm)"""
+    breaches = []
+    
+    for position in positions:
+        # Check if position has stop loss attribute and it's set
+        if not hasattr(position, 'stop_loss') or position.stop_loss == 0:
+            breaches.append(RuleBreach(
+                level="WARN",
+                code="MISSING_SL",
+                message=f"⚠️ Position {position.symbol} ({position.position_id}) missing required stop loss",
+                value=0.0,
+                threshold=1.0
+            ))
+    
+    return breaches
+
+
+# ============================================================
+# Legacy RiskRuleEngine Class (Backwards Compatibility)
+# ============================================================
+
 class RiskRuleEngine:
+    """
+    Legacy rule engine - maintained for backwards compatibility
+    Wraps the pure check_account_rules function
+    """
+    
+    def __init__(self, prop_rules: Optional[PropRules] = None, starting_balance: Optional[float] = None):
+        """
+        Initialize rule engine
+        
+        Args:
+            prop_rules: PropRules object with firm-specific rules (if None, uses Config)
+            starting_balance: Starting account balance for total drawdown calculation
+        """
+        if prop_rules:
+            self.rules = prop_rules
+        else:
+            # Fallback to legacy Config for backwards compatibility
+            self.rules = PropRules(
+                name="Legacy",
+                max_daily_drawdown_pct=Config.MAX_DAILY_LOSS_PERCENT,
+                max_total_drawdown_pct=Config.MAX_DAILY_LOSS_PERCENT * 2,
+                max_risk_per_trade_pct=Config.MAX_POSITION_SIZE_PERCENT,
+                max_open_lots=100.0,
+                max_positions=20
+            )
+        
+        self.starting_balance = starting_balance or 10000.0
+    
+    def evaluate(self, snapshot: AccountSnapshot) -> List[RuleViolation]:
+        """
+        Evaluate all rules against account snapshot
+        Returns legacy RuleViolation objects for backwards compatibility
+        """
+        # Ensure snapshot has starting balance
+        if not snapshot.starting_balance:
+            snapshot.starting_balance = self.starting_balance
+        
+        # Use pure function to check rules
+        breaches = check_account_rules(snapshot, self.rules, self.starting_balance)
+        
+        # Convert RuleBreach to RuleViolation for backwards compatibility
+        violations = [RuleViolation.from_breach(breach) for breach in breaches]
+        
+        return violations
     """Engine for evaluating risk rules against account state"""
     
     def __init__(self, prop_rules: Optional[PropRules] = None, starting_balance: Optional[float] = None):
