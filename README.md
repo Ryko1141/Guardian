@@ -22,6 +22,7 @@ A Python-based trading account monitoring system that tracks risk metrics and se
 - **Multi-account monitoring** - Monitor multiple accounts simultaneously with `multi_runner.py`
 - **Offline testing** - Test rules with dummy data (no API required)
 - **Today's P&L tracking** - monitors realised + unrealised profit/loss
+- **Automatic broker server time detection** - accurate day rollover for both platforms
 - **Account snapshots** - balance, equity, margin, positions
 - Easy configuration via environment variables
 

@@ -16,6 +16,7 @@ This risk monitor supports both **cTrader** and **MetaTrader 5** platforms. Here
 | **API Limitations** | Rate limits apply | No limits (local) |
 | **Terminal Required** | ❌ No | ✅ Yes (MT5 must be installed) |
 | **Multiple Accounts** | Easy (multiple tokens) | Moderate (multiple connections) |
+| **Server Time Detection** | ✅ Automatic | ✅ Automatic |
 
 ## cTrader Open API
 

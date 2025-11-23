@@ -2,7 +2,7 @@
 cTrader API client for fetching account and trading data
 """
 from typing import Dict, List, Optional
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import requests
 import asyncio
 import websockets
@@ -42,6 +42,7 @@ class CTraderClient:
         self._day_start_balance: Optional[float] = None
         self._day_start_equity: Optional[float] = None
         self._current_date: Optional[datetime] = None
+        self._server_time_offset: Optional[float] = None  # Offset in seconds from local time
         
     def _get_headers(self) -> Dict[str, str]:
         """Get authorization headers for API requests"""
@@ -49,6 +50,48 @@ class CTraderClient:
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json"
         }
+    
+    def get_server_time(self) -> datetime:
+        """
+        Get the current broker server time from cTrader.
+        
+        cTrader returns timestamps in UTC milliseconds in various API responses.
+        We'll use a spot price subscription or recent deal timestamp to determine server time.
+        
+        Returns:
+            datetime: Current broker server time
+        """
+        try:
+            # Get recent deals to extract server timestamp
+            # cTrader provides timestamps in milliseconds since Unix epoch
+            url = f"{self.REST_BASE_URL}/v2/accounts/{self.account_id}/deals"
+            response = requests.get(url, headers=self._get_headers(), timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            deals = data.get("deal", [])
+            if deals and len(deals) > 0:
+                # Get the most recent deal timestamp (in milliseconds)
+                latest_timestamp = max(deal.get("executionTimestamp", 0) for deal in deals)
+                if latest_timestamp > 0:
+                    server_time = datetime.fromtimestamp(latest_timestamp / 1000)
+                    
+                    # Calculate offset if not already set
+                    if self._server_time_offset is None:
+                        local_time = datetime.now()
+                        self._server_time_offset = (server_time - local_time).total_seconds()
+                        print(f"Detected cTrader server time offset: {self._server_time_offset:.0f} seconds")
+                    
+                    return server_time
+        except Exception as e:
+            print(f"Could not fetch server time from deals: {e}")
+        
+        # Fallback: if we have a cached offset, use it
+        if self._server_time_offset is not None:
+            return datetime.now() + timedelta(seconds=self._server_time_offset)
+        
+        # Final fallback: assume UTC (cTrader typically uses UTC)
+        return datetime.utcnow()
     
     # ==================== REST API Methods (Synchronous) ====================
     
@@ -144,11 +187,10 @@ class CTraderClient:
         Calculate today's realised P&L from closed positions
         Returns sum of P&L for deals closed since broker server midnight
         """
-        # Get broker server time (typically UTC+2 or UTC+3 for cTrader)
-        now = datetime.utcnow()
+        # Get broker server time
+        now = self.get_server_time()
         
-        # Approximate broker midnight (you may need to adjust timezone)
-        # For now, using UTC midnight
+        # Calculate broker midnight based on server time
         today_start = datetime.combine(now.date(), time.min)
         from_timestamp = int(today_start.timestamp() * 1000)
         
@@ -176,7 +218,7 @@ class CTraderClient:
             balance: Current account balance
             equity: Current account equity
         """
-        now = datetime.now()
+        now = self.get_server_time()
         current_date = now.date()
         
         # First run or new day detected

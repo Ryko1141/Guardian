@@ -147,12 +147,12 @@ class AccountSnapshot:
 
 ### Client Implementation
 
-Both `CTraderClient` and `MT5Client` implement day start tracking:
+Both `CTraderClient` and `MT5Client` implement day start tracking with automatic broker server time detection:
 
 ```python
 def _update_day_start_anchor(self, balance: float, equity: float):
     """Update day start values when new day detected"""
-    now = datetime.now()
+    now = self.get_server_time()  # Uses broker server time, not local time
     current_date = now.date()
     
     # New day detected
@@ -167,12 +167,15 @@ def _update_day_start_anchor(self, balance: float, equity: float):
 
 ### Automatic Day Start Detection
 
-The clients automatically detect new trading days and update the anchor:
+The clients automatically detect new trading days and update the anchor using **broker server time**:
 
-1. **First run**: Sets anchor to current balance/equity (whichever is higher)
-2. **Each snapshot**: Checks if date changed
-3. **New day detected**: Updates anchor to new day's higher value
-4. **Same day**: Continues using existing anchor
+1. **First connection**: Detects broker timezone offset automatically
+2. **First run**: Sets anchor to current balance/equity (whichever is higher)
+3. **Each snapshot**: Checks if broker server date changed (uses `get_server_time()`)
+4. **New day detected**: Updates anchor to new day's higher value at broker midnight
+5. **Same day**: Continues using existing anchor
+
+**Important**: Day rollover detection uses the broker's server time, not your local time. This ensures accurate daily drawdown tracking regardless of your location or timezone.
 
 ## Configuration
 

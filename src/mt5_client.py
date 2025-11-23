@@ -34,6 +34,7 @@ class MT5Client:
         self._day_start_balance: Optional[float] = None
         self._day_start_equity: Optional[float] = None
         self._current_date: Optional[datetime] = None
+        self._server_timezone_offset: Optional[int] = None  # Offset in hours from UTC
     
     def connect(self) -> bool:
         """
@@ -59,6 +60,11 @@ class MT5Client:
             return False
         
         self.is_connected = True
+        
+        # Calculate server timezone offset on first connection
+        if self._server_timezone_offset is None:
+            self._calculate_server_timezone_offset()
+        
         print(f"Connected to MT5 account {self.account_number} on {self.server}")
         return True
     
@@ -74,6 +80,62 @@ class MT5Client:
         if not self.is_connected:
             return self.connect()
         return True
+    
+    def _calculate_server_timezone_offset(self):
+        """
+        Calculate the broker server's timezone offset from UTC.
+        MT5 doesn't provide server time directly in API, but we can infer it
+        from the last tick timestamp or use terminal_info.
+        """
+        if not self.is_connected:
+            return
+        
+        # Get a recent tick to determine server time
+        # Most MT5 brokers use UTC+2 or UTC+3 (EET/EEST)
+        # We'll use symbol_info_tick to get server time
+        try:
+            # Try to get a tick from a common symbol
+            symbols = mt5.symbols_get()
+            if symbols and len(symbols) > 0:
+                tick = mt5.symbol_info_tick(symbols[0].name)
+                if tick:
+                    # tick.time is server time as Unix timestamp
+                    server_time = datetime.fromtimestamp(tick.time)
+                    utc_time = datetime.utcnow()
+                    # Calculate offset in hours
+                    offset_seconds = (server_time - utc_time).total_seconds()
+                    self._server_timezone_offset = round(offset_seconds / 3600)
+                    print(f"Detected MT5 server timezone offset: UTC{self._server_timezone_offset:+d}")
+                    return
+        except Exception as e:
+            print(f"Could not determine server timezone offset: {e}")
+        
+        # Default to UTC+2 (common for MT5 brokers)
+        self._server_timezone_offset = 2
+        print(f"Using default MT5 server timezone offset: UTC+2")
+    
+    def get_server_time(self) -> datetime:
+        """
+        Get the current broker server time.
+        
+        Returns:
+            datetime: Current broker server time
+        """
+        if not self._ensure_connected():
+            return datetime.now()
+        
+        # Get latest tick from any available symbol
+        symbols = mt5.symbols_get()
+        if symbols and len(symbols) > 0:
+            tick = mt5.symbol_info_tick(symbols[0].name)
+            if tick:
+                return datetime.fromtimestamp(tick.time)
+        
+        # Fallback: use UTC with offset
+        if self._server_timezone_offset is not None:
+            return datetime.utcnow() + timedelta(hours=self._server_timezone_offset)
+        
+        return datetime.now()
     
     # ==================== Account Data Methods ====================
     
@@ -243,14 +305,14 @@ class MT5Client:
     def get_today_pl(self) -> float:
         """
         Calculate today's realised P&L from closed positions
-        Returns sum of P&L for deals closed since midnight
+        Returns sum of P&L for deals closed since broker server midnight
         """
         # Get broker server time
         if not self._ensure_connected():
             return 0.0
         
         # Calculate today's start (broker server midnight)
-        now = datetime.now()
+        now = self.get_server_time()
         today_start = datetime.combine(now.date(), time.min)
         
         deals = self.get_deals_history(from_date=today_start, to_date=now)
@@ -280,7 +342,7 @@ class MT5Client:
             balance: Current account balance
             equity: Current account equity
         """
-        now = datetime.now()
+        now = self.get_server_time()
         current_date = now.date()
         
         # First run or new day detected

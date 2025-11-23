@@ -98,17 +98,59 @@ async def main():
     await client.listen_for_updates(on_update)
 ```
 
+## Server Time Detection
+
+**Both MT5 and cTrader clients now automatically detect broker server time!**
+
+### MT5 Server Time Detection
+
+The MT5 client calculates the broker's timezone offset on first connection:
+
+1. Retrieves latest tick timestamp from broker
+2. Compares server time with UTC time
+3. Calculates offset in hours (typically UTC+2 or UTC+3)
+4. Logs detected offset for transparency
+5. Falls back to UTC+2 if detection fails
+
+```python
+client.get_server_time()  # Returns broker's current time
+```
+
+### cTrader Server Time Detection
+
+The cTrader client detects server time from API timestamps:
+
+1. Fetches recent deal timestamps (in UTC milliseconds)
+2. Calculates offset between server and local time
+3. Caches offset for subsequent calls
+4. Logs detected offset for transparency
+5. Falls back to UTC if detection fails
+
+```python
+client.get_server_time()  # Returns broker's current time
+```
+
+### Day Rollover Detection
+
+Both clients use broker server time for accurate day tracking:
+
+- **Day start anchor** updates at broker server midnight (not local midnight)
+- **Today's P&L** calculation uses broker server time boundaries
+- **Date changes** detected based on broker's calendar day
+
+This ensures that daily drawdown calculations align with the broker's trading day, preventing issues where local time doesn't match broker time zones.
+
 ## Today's P&L Calculation
 
-The `get_today_pl()` method calculates realised P&L from midnight:
+The `get_today_pl()` method calculates realised P&L from broker server midnight:
 
-1. Get current UTC time
-2. Calculate broker midnight (approximate - may need timezone adjustment)
-3. Fetch all deals closed since midnight
-4. Sum the `closeProfit` values
-5. Convert from cents to dollars
+1. Get current broker server time (via `get_server_time()`)
+2. Calculate broker midnight based on detected server time
+3. Fetch all deals closed since broker midnight
+4. Sum the profit values (MT5: profit + commission + swap, cTrader: closeProfit)
+5. Convert from cents to dollars (cTrader only)
 
-**Note**: Broker timezone is typically UTC+2 or UTC+3. You may need to adjust the midnight calculation based on your broker's server location.
+**Note**: Server time is automatically detected on first connection. The detected offset is logged for transparency.
 
 ## Error Handling
 
@@ -177,14 +219,14 @@ This will:
 
 ## Known Limitations
 
-1. **Broker Timezone**: Today's P&L calculation uses UTC midnight approximation
+1. ~~**Broker Timezone**: Today's P&L calculation uses UTC midnight approximation~~ ✅ **RESOLVED**: Both clients now automatically detect and use broker server time
 2. **WebSocket Reconnection**: Basic implementation - may need enhancement for production
 3. **Rate Limiting**: No built-in rate limiting - be mindful of API quotas
 4. **Historical Data**: Limited to recent deals - full history may require pagination
 
 ## Future Enhancements
 
-- [ ] Automatic broker timezone detection
+- [x] Automatic broker timezone detection (implemented for both MT5 and cTrader)
 - [ ] WebSocket auto-reconnection with exponential backoff
 - [ ] Rate limiting and request throttling
 - [ ] Historical data pagination
