@@ -276,8 +276,8 @@ This monitor connects directly to the MT5 terminal using the official MetaTrader
 ### REST Polling Mode (Both Platforms)
 ```
 Runner → Client.get_account_snapshot() → API/Terminal
-       → RiskRuleEngine.evaluate()
-       → Notifier.send_violations()
+       → check_account_rules() → List[RuleBreach]
+       → notify_console() → Rich Panel Display
        → Sleep 60s → Repeat
 ```
 
@@ -288,7 +288,7 @@ Runner → Client.get_account_snapshot() → API/Terminal
 ```
 AsyncRunner → CTraderClient.connect() → WebSocket
             → Subscribe to account events
-            → On event: check rules + notify
+            → On event: check_account_rules() + notify_console()
             → Periodic REST snapshot for full state
 ```
 
