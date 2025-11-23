@@ -37,6 +37,25 @@ class AccountSnapshot:
     positions: List[Position]
     total_profit_loss: float
     starting_balance: Optional[float] = None  # For total drawdown calculation
+    day_start_balance: Optional[float] = None  # Balance at start of trading day
+    day_start_equity: Optional[float] = None   # Equity at start of trading day
+    
+    @property
+    def day_start_anchor(self) -> float:
+        """
+        Get day start anchor - uses whichever is higher (balance or equity).
+        This is the reference point for max daily drawdown calculation.
+        Falls back to balance if day start values not set.
+        """
+        if self.day_start_balance is not None and self.day_start_equity is not None:
+            return max(self.day_start_balance, self.day_start_equity)
+        elif self.day_start_balance is not None:
+            return self.day_start_balance
+        elif self.day_start_equity is not None:
+            return self.day_start_equity
+        else:
+            # Fallback: use current balance
+            return self.balance
     
     @property
     def daily_loss_percent(self) -> float:
@@ -45,9 +64,30 @@ class AccountSnapshot:
     
     @property
     def daily_drawdown_pct(self) -> float:
-        """Calculate daily drawdown as negative percentage (prop firm convention)"""
-        # Returns negative value for losses (e.g., -3.5% for 3.5% loss)
-        return (self.total_profit_loss / self.balance) * 100 if self.balance > 0 else 0
+        """
+        Calculate daily drawdown using "whichever is higher" rule.
+        
+        Uses the WORST CASE between:
+        - Equity-based loss (captures floating losses)
+        - Balance-based loss (captures realized losses)
+        
+        This ensures we can't "hide" risk in floating drawdown.
+        Returns negative value for losses (e.g., -3.5% for 3.5% loss).
+        """
+        anchor = self.day_start_anchor
+        
+        if anchor <= 0:
+            return 0.0
+        
+        # Calculate loss from anchor using both equity and balance
+        daily_loss_by_equity = anchor - self.equity
+        daily_loss_by_balance = anchor - self.balance
+        
+        # Use whichever shows the LARGER loss (worst case)
+        daily_loss_money = max(daily_loss_by_equity, daily_loss_by_balance)
+        
+        # Convert to percentage (negative for losses)
+        return -(100.0 * daily_loss_money / anchor)
     
     @property
     def total_drawdown_pct(self) -> float:

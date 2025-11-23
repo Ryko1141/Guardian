@@ -29,6 +29,11 @@ class MT5Client:
         
         self.is_connected = False
         self._last_snapshot = None
+        
+        # Day start tracking for "whichever is higher" rule
+        self._day_start_balance: Optional[float] = None
+        self._day_start_equity: Optional[float] = None
+        self._current_date: Optional[datetime] = None
     
     def connect(self) -> bool:
         """
@@ -261,6 +266,33 @@ class MT5Client:
         
         return total_pl
     
+    def _update_day_start_anchor(self, balance: float, equity: float):
+        """
+        Update day start anchor when server date changes.
+        
+        Implements the "use whichever is higher" rule:
+        At first tick after server date changes (00:00 server time):
+        - dayStartBalance = current balance
+        - dayStartEquity = current equity
+        - dayStartAnchor = max(balance, equity)
+        
+        Args:
+            balance: Current account balance
+            equity: Current account equity
+        """
+        now = datetime.now()
+        current_date = now.date()
+        
+        # First run or new day detected
+        if self._current_date is None or current_date != self._current_date:
+            self._day_start_balance = balance
+            self._day_start_equity = equity
+            self._current_date = current_date
+            
+            anchor = max(balance, equity)
+            print(f"Day start anchor updated: Balance=${balance:,.2f}, "
+                  f"Equity=${equity:,.2f}, Anchor=${anchor:,.2f} (using higher)")
+    
     def get_open_positions(self) -> List[Position]:
         """Get list of open positions as Position objects"""
         positions_data = self.get_positions()
@@ -286,8 +318,9 @@ class MT5Client:
     
     def get_account_snapshot(self) -> AccountSnapshot:
         """
-        Create a complete account snapshot with all relevant data
-        This is the main method to use for monitoring
+        Create a complete account snapshot with all relevant data.
+        Implements "whichever is higher" rule for daily drawdown tracking.
+        This is the main method to use for monitoring.
         """
         if not self._ensure_connected():
             raise ConnectionError("Failed to connect to MT5")
@@ -304,6 +337,9 @@ class MT5Client:
         margin_used = float(account_info.get("margin", 0))
         margin_free = float(account_info.get("margin_free", 0))
         unrealised_pnl = float(account_info.get("profit", 0))
+        
+        # Update day start anchor if new day detected
+        self._update_day_start_anchor(balance, equity)
         
         # Parse positions
         positions = []
@@ -335,7 +371,9 @@ class MT5Client:
             margin_used=margin_used,
             margin_available=margin_free,
             positions=positions,
-            total_profit_loss=total_pl
+            total_profit_loss=total_pl,
+            day_start_balance=self._day_start_balance,
+            day_start_equity=self._day_start_equity
         )
         
         self._last_snapshot = snapshot
