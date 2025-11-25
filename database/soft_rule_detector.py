@@ -227,37 +227,62 @@ JSON RESPONSE:"""
         return None
 
 
-def detect_challenge_type(text: str, title: str, url: str) -> List[str]:
+def detect_challenge_type(text: str, title: str, url: str, firm_name: str = "FundedNext") -> List[str]:
     """
     Detect which challenge types this document is about.
-    
+    Maps detected types to canonical program IDs using taxonomy.
+
     Args:
         text: Document text
         title: Document title
         url: Document URL
-        
+        firm_name: Firm name for taxonomy lookup
+
     Returns:
-        List of challenge type identifiers
+        List of canonical program_id identifiers or ['general']
     """
+    import sys
+    import logging
+    from pathlib import Path
+    
+    # Add parent directory to path for taxonomy import
+    parent_dir = str(Path(__file__).parent.parent)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    
+    from propfirm_scraper.taxonomy import map_alias_to_program
     from rule_patterns import CHALLENGE_TYPE_KEYWORDS
-    
+
     combined = (text + " " + title + " " + url).lower()
-    detected_types = []
-    
+    detected_program_ids = []
+    unmapped_types = []
+
     for challenge_type, keywords in CHALLENGE_TYPE_KEYWORDS.items():
         if any(keyword in combined for keyword in keywords):
-            detected_types.append(challenge_type)
+            # Map to canonical program_id using taxonomy
+            program_id = map_alias_to_program(firm_name, challenge_type)
+            if program_id:
+                if program_id not in detected_program_ids:
+                    detected_program_ids.append(program_id)
+            else:
+                # Log unmapped type for manual review
+                if challenge_type not in unmapped_types:
+                    unmapped_types.append(challenge_type)
     
-    # If no specific type detected but mentions "challenge" or "account"
-    if not detected_types:
+    # Log unmapped types
+    if unmapped_types:
+        logging.warning(f"Unmapped challenge types detected: {unmapped_types} in document: {title[:50]}")
+
+    # Fallback detection with taxonomy mapping
+    if not detected_program_ids:
         if 'challenge' in combined or 'evaluation' in combined:
-            detected_types.append('general')
+            eval_prog = map_alias_to_program(firm_name, "evaluation")
+            detected_program_ids.append(eval_prog if eval_prog else 'general')
         elif 'funded' in combined or 'express' in combined:
-            detected_types.append('funded')
-    
-    return detected_types if detected_types else ['general']
+            funded_prog = map_alias_to_program(firm_name, "funded")
+            detected_program_ids.append(funded_prog if funded_prog else 'general')
 
-
+    return detected_program_ids if detected_program_ids else ['general']
 def merge_similar_rules(rules: List[Dict]) -> List[Dict]:
     """
     Merge similar soft rules to avoid duplication.

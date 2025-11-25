@@ -51,10 +51,10 @@ class RuleStorage:
                 """
                 INSERT INTO firm_rule (
                     firm_id, source_document_id, rule_type, rule_category,
-                    challenge_type, value, details, conditions, severity,
+                    challenge_type, program_id, value, details, conditions, severity,
                     extracted_at, extraction_method, confidence_score
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     firm_id,
@@ -62,6 +62,7 @@ class RuleStorage:
                     rule.get('rule_type', 'unknown'),
                     rule.get('category', 'general'),
                     rule.get('challenge_type', 'general'),
+                    rule.get('program_id', 'general'),
                     rule.get('value', ''),
                     rule.get('description', ''),
                     rule.get('raw_span', ''),  # Store context in conditions field
@@ -71,10 +72,8 @@ class RuleStorage:
                     rule.get('confidence', 1.0 if not rule.get('is_soft_rule') else 0.7)
                 )
             )
-            
-            return self.cursor.lastrowid
-            
-        except sqlite3.Error as e:
+
+            return self.cursor.lastrowid        except sqlite3.Error as e:
             print(f"  [ERROR] Error inserting rule: {e}")
             return 0
     

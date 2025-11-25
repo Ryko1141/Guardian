@@ -122,31 +122,32 @@ class RuleExtractionPipeline:
             if len(text.strip()) < 200:
                 return
             
-            # Detect challenge types for this document
-            challenge_types = detect_challenge_type(text, title, url)
-            
+            # Detect program IDs using taxonomy (canonical program identifiers)
+            program_ids = detect_challenge_type(text, title, url)
+
             # Extract hard rules
             hard_rules = self.hard_extractor.extract_all(text, title, url)
             hard_rules = deduplicate_rules(hard_rules)
-            
+
             # Extract soft rules
             soft_rules = []
             if self.soft_detector:
                 soft_rules = self.soft_detector.extract_soft_rules(text, title, url)
                 soft_rules = merge_similar_rules(soft_rules)
-            
-            # Assign challenge types to all rules
+
+            # Assign program_id to all rules (taxonomy-validated canonical IDs)
             all_rules = hard_rules + soft_rules
             for rule in all_rules:
-                # If document is about specific challenge, assign it
-                if len(challenge_types) == 1 and challenge_types[0] != 'general':
-                    rule['challenge_type'] = challenge_types[0]
+                # If document is about specific program, assign it
+                if len(program_ids) == 1 and program_ids[0] != 'general':
+                    rule['program_id'] = program_ids[0]
                 else:
                     # Keep existing or default to general
-                    if 'challenge_type' not in rule:
-                        rule['challenge_type'] = 'general'
-            
-            # Store rules in database
+                    if 'program_id' not in rule:
+                        rule['program_id'] = 'general'
+                
+                # Maintain backward compatibility - set challenge_type to program_id
+                rule['challenge_type'] = rule['program_id']            # Store rules in database
             if all_rules:
                 inserted = self.rule_storage.insert_rules_batch(firm_id, all_rules, doc_id)
                 self.stats['hard_rules_extracted'] += len(hard_rules)
