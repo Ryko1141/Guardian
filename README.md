@@ -19,7 +19,16 @@ Guardian is a comprehensive Python framework that combines intelligent web scrap
 - Multi-account monitoring with independent rule sets
 - Async monitoring for multiple accounts simultaneously
 
-### 3. **Risk Rule Enforcement**
+### 3. **MT5 REST API** ⭐ NEW
+- **RESTful API** for remote MT5 account access
+- **Session-based authentication** with secure token management
+- **Multi-client support** - multiple users can connect with their own credentials
+- **Comprehensive endpoints** for account data, positions, orders, and history
+- **Interactive documentation** via Swagger UI
+- **Web and mobile ready** with CORS support
+- **Easy integration** with any programming language or platform
+
+### 4. **Risk Rule Enforcement**
 Guardian monitors and enforces critical prop firm rules:
 - **Daily Drawdown Limits** - Prevents catastrophic daily losses
 - **Total Drawdown Limits** - Tracks drawdown from starting balance
@@ -29,7 +38,7 @@ Guardian monitors and enforces critical prop firm rules:
 - **Margin Levels** - Warns when margin gets dangerously low
 - **Stop Loss Requirements** - Validates required stop losses
 
-### 4. **Smart Alerts**
+### 5. **Smart Alerts**
 - Console notifications with rich formatting
 - Warning thresholds (default 80% of limit)
 - Critical breach alerts
@@ -41,6 +50,7 @@ Guardian monitors and enforces critical prop firm rules:
 guardian/
 ├── src/                      # Core monitoring and API clients
 │   ├── mt5_client.py         # MetaTrader 5 integration
+│   ├── mt5_api.py            # ⭐ MT5 REST API server
 │   ├── ctrader_client.py     # cTrader integration
 │   ├── rules.py              # Risk rule engine
 │   ├── models.py             # Data models (Position, AccountSnapshot, RuleBreach)
@@ -64,6 +74,9 @@ guardian/
 │   ├── patterns.py           # Extraction patterns
 │   └── taxonomy_validator.py # Taxonomy validation
 ├── examples/                 # Usage examples
+│   ├── api/                  # ⭐ MT5 REST API examples
+│   │   ├── test_mt5_api.py  # Python client example
+│   │   └── mt5_api_client.html # Web-based API client
 │   ├── usage_example.py      # End-to-end demo
 │   ├── test_mt5.py           # MT5 monitoring example
 │   ├── test_rules_offline.py # Rule testing without API
@@ -73,7 +86,22 @@ guardian/
 │   ├── validate_coverage.py  # Test coverage validation
 │   └── run_all_tests.py      # Test runner
 ├── tests/                    # Test suite
+├── run_mt5_api.py            # ⭐ MT5 REST API server launcher
+├── setup_mt5_api.py          # ⭐ API setup script
 └── docs/                     # Documentation
+    ├── api/                  # ⭐ MT5 REST API documentation
+    │   ├── MT5_REST_API.md          # Complete API reference
+    │   ├── MT5_API_QUICKSTART.md    # Quick start guide
+    │   ├── MT5_API_GETTING_STARTED.md # Beginner guide
+    │   ├── MT5_API_IMPLEMENTATION.md # Technical details
+    │   ├── MT5_API_ARCHITECTURE.md   # Architecture overview
+    │   ├── MT5_API_FILE_INDEX.md     # Complete file index
+    │   ├── MT5_API_QUICK_REFERENCE.md # Quick reference card
+    │   └── MT5_API_SUMMARY.md        # Implementation summary
+    ├── features/             # Feature documentation
+    ├── guides/               # User guides
+    ├── implementation/       # Implementation details
+    └── integration/          # Integration guides
 ```
 
 ## 🚀 Quick Start
@@ -151,7 +179,38 @@ python -m src.multi_runner
 python -m src.async_runner
 ```
 
-### 4. Scrape and Extract Rules
+### 4. MT5 REST API (Optional) ⭐ NEW
+
+Start the REST API server to allow remote access to MT5 accounts:
+
+```bash
+# Start the API server
+python run_mt5_api.py
+```
+
+The server starts on `http://localhost:8000` with:
+- Interactive documentation at `/docs`
+- Alternative docs at `/redoc`
+- Full authentication and session management
+
+**Quick test with Python:**
+```python
+from examples.api.test_mt5_api import MT5ApiClient
+
+client = MT5ApiClient()
+client.login(account_number=12345678, password="your_password", server="YourBroker-Demo")
+account = client.get_account_info()
+print(f"Balance: ${account['balance']:,.2f}")
+client.logout()
+```
+
+**Or use the web interface:**
+- Open `examples/api/mt5_api_client.html` in your browser
+- Enter MT5 credentials and start monitoring
+
+📖 **Full API Documentation:** See `docs/api/MT5_REST_API.md` and `docs/api/MT5_API_QUICKSTART.md`
+
+### 5. Scrape and Extract Rules
 
 ```bash
 # Scrape a prop firm help center

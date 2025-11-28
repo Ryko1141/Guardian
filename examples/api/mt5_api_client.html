@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT5 REST API Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2d3748;
+            color: white;
+            padding: 20px 30px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #a0aec0;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: #48bb78;
+        }
+
+        button.secondary:hover {
+            background: #38a169;
+        }
+
+        button.danger {
+            background: #f56565;
+        }
+
+        button.danger:hover {
+            background: #e53e3e;
+        }
+
+        .output {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 15px;
+            min-height: 100px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .status {
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #fc8181;
+        }
+
+        .status.info {
+            background: #bee3f8;
+            color: #2c5282;
+            border: 1px solid #90cdf4;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 MT5 REST API Client</h1>
+            <p>Connect to MetaTrader 5 via REST API</p>
+        </div>
+
+        <div class="content">
+            <!-- Status Message -->
+            <div id="statusMessage" class="hidden"></div>
+
+            <!-- Login Section -->
+            <div class="section" id="loginSection">
+                <h2>Login to MT5</h2>
+                <div class="form-group">
+                    <label for="accountNumber">Account Number:</label>
+                    <input type="number" id="accountNumber" placeholder="12345678">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" placeholder="Your MT5 password">
+                </div>
+                <div class="form-group">
+                    <label for="server">Server:</label>
+                    <input type="text" id="server" placeholder="MetaQuotes-Demo">
+                </div>
+                <button onclick="login()">Login</button>
+            </div>
+
+            <!-- Account Operations Section -->
+            <div class="section hidden" id="operationsSection">
+                <h2>Account Operations</h2>
+                <div class="grid">
+                    <button class="secondary" onclick="getAccountInfo()">Get Account Info</button>
+                    <button class="secondary" onclick="getBalance()">Get Balance</button>
+                    <button class="secondary" onclick="getEquity()">Get Equity</button>
+                    <button class="secondary" onclick="getPositions()">Get Positions</button>
+                    <button class="secondary" onclick="getOrders()">Get Orders</button>
+                    <button class="secondary" onclick="getSnapshot()">Get Snapshot</button>
+                    <button class="secondary" onclick="getHistory()">Get History</button>
+                    <button class="secondary" onclick="getServerTime()">Get Server Time</button>
+                </div>
+                <button class="danger" onclick="logout()">Logout</button>
+            </div>
+
+            <!-- Output Section -->
+            <div class="section">
+                <h2>Response Output</h2>
+                <div id="output" class="output">Waiting for API calls...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        let sessionToken = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function displayOutput(data) {
+            const output = document.getElementById('output');
+            output.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function login() {
+            const accountNumber = document.getElementById('accountNumber').value;
+            const password = document.getElementById('password').value;
+            const server = document.getElementById('server').value;
+
+            if (!accountNumber || !password || !server) {
+                showStatus('Please fill in all fields', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        account_number: parseInt(accountNumber),
+                        password: password,
+                        server: server
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    sessionToken = data.session_token;
+                    showStatus(`✓ Logged in successfully! Account: ${data.account_number}`, 'success');
+                    displayOutput(data);
+                    
+                    // Show operations, hide login
+                    document.getElementById('loginSection').classList.add('hidden');
+                    document.getElementById('operationsSection').classList.remove('hidden');
+                } else {
+                    showStatus(`✗ Login failed: ${data.detail}`, 'error');
+                    displayOutput(data);
+                }
+            } catch (error) {
+                showStatus(`✗ Connection error: ${error.message}`, 'error');
+                displayOutput({ error: error.message });
+            }
+        }
+
+        async function makeAuthenticatedRequest(endpoint) {
+            if (!sessionToken) {
+                showStatus('Not logged in', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayOutput(data);
+                    showStatus(`✓ Request successful`, 'success');
+                } else {
+                    displayOutput(data);
+                    showStatus(`✗ Request failed: ${data.detail}`, 'error');
+                    
+                    // If unauthorized, show login again
+                    if (response.status === 401) {
+                        sessionToken = null;
+                        document.getElementById('loginSection').classList.remove('hidden');
+                        document.getElementById('operationsSection').classList.add('hidden');
+                    }
+                }
+            } catch (error) {
+                showStatus(`✗ Connection error: ${error.message}`, 'error');
+                displayOutput({ error: error.message });
+            }
+        }
+
+        async function logout() {
+            if (!sessionToken) return;
+
+            try {
+                await fetch(`${API_BASE_URL}/api/v1/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                sessionToken = null;
+                showStatus('✓ Logged out successfully', 'success');
+                displayOutput({ message: 'Logged out' });
+                
+                // Show login, hide operations
+                document.getElementById('loginSection').classList.remove('hidden');
+                document.getElementById('operationsSection').classList.add('hidden');
+                
+                // Clear form
+                document.getElementById('password').value = '';
+            } catch (error) {
+                showStatus(`✗ Logout error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getAccountInfo() {
+            await makeAuthenticatedRequest('/api/v1/account');
+        }
+
+        async function getBalance() {
+            await makeAuthenticatedRequest('/api/v1/balance');
+        }
+
+        async function getEquity() {
+            await makeAuthenticatedRequest('/api/v1/equity');
+        }
+
+        async function getPositions() {
+            await makeAuthenticatedRequest('/api/v1/positions');
+        }
+
+        async function getOrders() {
+            await makeAuthenticatedRequest('/api/v1/orders');
+        }
+
+        async function getSnapshot() {
+            await makeAuthenticatedRequest('/api/v1/snapshot');
+        }
+
+        async function getHistory() {
+            await makeAuthenticatedRequest('/api/v1/history?from_days_ago=7');
+        }
+
+        async function getServerTime() {
+            await makeAuthenticatedRequest('/api/v1/server-time');
+        }
+    </script>
+</body>
+</html>
