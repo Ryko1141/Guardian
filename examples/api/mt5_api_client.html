@@ -229,6 +229,19 @@
                 <button class="danger" onclick="logout()">Logout</button>
             </div>
 
+            <!-- Prop Compliance Section -->
+            <div class="section hidden" id="complianceSection">
+                <h2>📊 Prop Firm Compliance Check</h2>
+                <div class="form-group">
+                    <label for="firmName">Prop Firm Name (Optional):</label>
+                    <input type="text" id="firmName" placeholder="e.g., FTMO, 5ers, FundedNext (leave empty for all firms)">
+                </div>
+                <button class="secondary" onclick="scanCompliance()">🔍 Scan for Rule Violations</button>
+                <p style="color: #718096; font-size: 13px; margin-top: 10px;">
+                    ℹ️ This scans your account against prop firm rules using AI analysis
+                </p>
+            </div>
+
             <!-- Output Section -->
             <div class="section">
                 <h2>Response Output</h2>
@@ -290,6 +303,7 @@
                     // Show operations, hide login
                     document.getElementById('loginSection').classList.add('hidden');
                     document.getElementById('operationsSection').classList.remove('hidden');
+                    document.getElementById('complianceSection').classList.remove('hidden');
                 } else {
                     showStatus(`✗ Login failed: ${data.detail}`, 'error');
                     displayOutput(data);
@@ -327,6 +341,7 @@
                         sessionToken = null;
                         document.getElementById('loginSection').classList.remove('hidden');
                         document.getElementById('operationsSection').classList.add('hidden');
+                        document.getElementById('complianceSection').classList.add('hidden');
                     }
                 }
             } catch (error) {
@@ -353,6 +368,7 @@
                 // Show login, hide operations
                 document.getElementById('loginSection').classList.remove('hidden');
                 document.getElementById('operationsSection').classList.add('hidden');
+                document.getElementById('complianceSection').classList.add('hidden');
                 
                 // Clear form
                 document.getElementById('password').value = '';
@@ -391,6 +407,64 @@
 
         async function getServerTime() {
             await makeAuthenticatedRequest('/api/v1/server-time');
+        }
+
+        async function scanCompliance() {
+            if (!sessionToken) {
+                showStatus('Not logged in', 'error');
+                return;
+            }
+
+            const firmName = document.getElementById('firmName').value.trim();
+            const endpoint = firmName 
+                ? `/scan?firm_name=${encodeURIComponent(firmName)}`
+                : '/scan';
+
+            try {
+                showStatus('🔄 Scanning account for rule violations... This may take a moment.', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayOutput(data);
+                    
+                    // Create summary message
+                    const critical = data.violation_count?.critical || 0;
+                    const high = data.violation_count?.high || 0;
+                    const medium = data.violation_count?.medium || 0;
+                    const low = data.violation_count?.low || 0;
+                    const total = critical + high + medium + low;
+                    
+                    if (total === 0) {
+                        showStatus('✅ No rule violations detected! Account is compliant.', 'success');
+                    } else if (critical > 0 || high > 0) {
+                        showStatus(`⚠️ Found ${total} violations (${critical} critical, ${high} high). Check output for details.`, 'error');
+                    } else {
+                        showStatus(`ℹ️ Found ${total} minor violations (${medium} medium, ${low} low).`, 'info');
+                    }
+                } else {
+                    displayOutput(data);
+                    showStatus(`✗ Scan failed: ${data.detail}`, 'error');
+                    
+                    // If unauthorized, show login again
+                    if (response.status === 401) {
+                        sessionToken = null;
+                        document.getElementById('loginSection').classList.remove('hidden');
+                        document.getElementById('operationsSection').classList.add('hidden');
+                        document.getElementById('complianceSection').classList.add('hidden');
+                    }
+                }
+            } catch (error) {
+                showStatus(`✗ Scan error: ${error.message}`, 'error');
+                displayOutput({ error: error.message });
+            }
         }
     </script>
 </body>
