@@ -43,21 +43,25 @@ class MT5Client:
         Returns:
             True if connection successful, False otherwise
         """
-        # Initialize MT5 connection
+        # Initialize MT5 connection with login credentials immediately
+        # This prevents MT5 from opening the login dialog
         if self.path:
-            if not mt5.initialize(path=self.path):
+            if not mt5.initialize(
+                path=self.path,
+                login=self.account_number,
+                password=self.password,
+                server=self.server
+            ):
                 print(f"MT5 initialize() failed, error code: {mt5.last_error()}")
                 return False
         else:
-            if not mt5.initialize():
+            if not mt5.initialize(
+                login=self.account_number,
+                password=self.password,
+                server=self.server
+            ):
                 print(f"MT5 initialize() failed, error code: {mt5.last_error()}")
                 return False
-        
-        # Login to account
-        if not mt5.login(self.account_number, password=self.password, server=self.server):
-            print(f"MT5 login failed, error code: {mt5.last_error()}")
-            mt5.shutdown()
-            return False
         
         self.is_connected = True
         
